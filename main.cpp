@@ -1,6 +1,6 @@
 #include <iostream>
 #include <fstream>
-#include <random>
+#include <cmath>
 #include <chrono>
 
 bool saveImage(const char* fileName, int width, int height, const char* pixels)
@@ -51,23 +51,25 @@ int main()
   int width, height;
   char *pixels = nullptr;
   loadImage("input.ppm", width, height, pixels);
-  int numPixels = width*height;
-  int numSuperpixels = 1000;
+  const int numPixels = width*height;
+  const int numSuperpixels = 1000;
   char* newPixels = new char[3*numPixels];
 
-  float m = 5.0f;
-  int maxIter = -1;//negative num if there is no limit
+  const float compactnessParam = 5.0f;
+  const int maxIter = -1; // Negative if there is no limit
 
-  int superpixelsWidth = std::sqrt(numSuperpixels);
-  int superpixelsHeight = numSuperpixels / superpixelsWidth; //NOTE: this may lead to non-squere grid
-  int numSuperpixelsAdjustes = superpixelsWidth*superpixelsHeight;
+  const int superpixelsAcrossWidth = std::sqrt(numSuperpixels);
+  const int superpixelsAcrossHeight = numSuperpixels / superpixelsAcrossWidth; // NOTE: this may lead to non-squere grid
+  const int numSuperpixelsAdjustes = superpixelsAcrossWidth*superpixelsAcrossHeight;
 
   float* centroidsX = new float[numSuperpixelsAdjustes];
   float* centroidsY = new float[numSuperpixelsAdjustes];
   float* centroidsR = new float[numSuperpixelsAdjustes];
   float* centroidsG = new float[numSuperpixelsAdjustes];
   float* centroidsB = new float[numSuperpixelsAdjustes];
-  int* centroidsCount = new int[numSuperpixelsAdjustes];
+  unsigned int* centroidsCount = new unsigned int[numSuperpixelsAdjustes];
+
+  auto then = std::chrono::steady_clock::now();
 
   for(int i = 0; i < numSuperpixelsAdjustes; ++i)
   {
@@ -77,43 +79,47 @@ int main()
     centroidsCount[i] = 0;
   }
 
-  float widthPerCentroid = (float)width/superpixelsWidth;
-  float heightPerCentroid = (float)height/superpixelsHeight;
-  float deltaDscale = 1.0/(widthPerCentroid*widthPerCentroid+heightPerCentroid*heightPerCentroid);
-  float deltaCscale = 1.0/(3*255*255);
+  const float widthPerCentroid = (float)width/superpixelsAcrossWidth;
+  const float heightPerCentroid = (float)height/superpixelsAcrossHeight;
 
-  for(int ny = 0, n = 0; ny < superpixelsHeight; ++ny)
+  // Initial placing of centroids
+  for(int ny = 0, n = 0; ny < superpixelsAcrossHeight; ++ny)
   {
-    for(int nx = 0; nx < superpixelsWidth; ++nx)
+    for(int nx = 0; nx < superpixelsAcrossWidth; ++nx)
     {
-      float x = (nx + 0.5) * widthPerCentroid;
-      float y = (ny + 0.5) * heightPerCentroid;
+      const float x = (nx + 0.5) * widthPerCentroid;
+      const float y = (ny + 0.5) * heightPerCentroid;
       centroidsX[n] = x;
       centroidsY[n] = y;
-      n+=1;
+      n += 1;
     }
   }
 
-  //TODO: move centroids out of edge
+  // TODO: move centroids out of edge
 
   int* toCentroidsMap = new int[numPixels];
   float* distances = new float[numPixels];
 
+  // Assign pixels to centroids
   for(int y = 0; y < height; ++y)
   {
     for (int x = 0; x < width; ++x)
     {
-      int pixelIndex = y*width+x;
-      int nx = x/widthPerCentroid;
-      int ny = y/heightPerCentroid;
-      int centroidIndex = ny*superpixelsWidth+nx;
+      const int pixelIndex = y*width+x;
+      const int nx = x/widthPerCentroid;
+      const int ny = y/heightPerCentroid;
+      const int centroidIndex = ny*superpixelsAcrossWidth+nx;
+      
       centroidsCount[centroidIndex] += 1;
       toCentroidsMap[pixelIndex] = centroidIndex;
+      
       centroidsR[centroidIndex] += (unsigned char)pixels[3*pixelIndex];
       centroidsG[centroidIndex] += (unsigned char)pixels[3*pixelIndex+1];
       centroidsB[centroidIndex] += (unsigned char)pixels[3*pixelIndex+2];
     }
   }
+
+  // Calculate average color for each centroid
   for(int i = 0; i < numSuperpixelsAdjustes; ++i)
   {
     centroidsR[i] /= centroidsCount[i];
@@ -121,85 +127,95 @@ int main()
     centroidsB[i] /= centroidsCount[i];
   }
 
+  // Define scaling factors for distance metric
+  const float spatialFactor = 1.0/
+    (widthPerCentroid*widthPerCentroid+heightPerCentroid*heightPerCentroid);
+  const float colorFactor = 1.0/(3*255*255);
+
+  // For each pixel, calucate it's distance to assigned centroid
   for(int y = 0; y < height; ++y)
   {
     for (int x = 0; x < width; ++x)
     {
-      int pixelIndex = y*width+x;
-      int pixelR = (unsigned char)pixels[3*pixelIndex];
-      int pixelG = (unsigned char)pixels[3*pixelIndex+1];
-      int pixelB = (unsigned char)pixels[3*pixelIndex+2];
+      const int pixelIndex = y*width+x;
+      const int pixelR = (unsigned char)pixels[3*pixelIndex];
+      const int pixelG = (unsigned char)pixels[3*pixelIndex+1];
+      const int pixelB = (unsigned char)pixels[3*pixelIndex+2];
 
-      int centeroidIndex = toCentroidsMap[pixelIndex];
+      const int centeroidIndex = toCentroidsMap[pixelIndex];
 
-      int centroidR = centroidsR[centeroidIndex];
-      int centroidG = centroidsG[centeroidIndex];
-      int centroidB = centroidsB[centeroidIndex];
+      const int centroidR = centroidsR[centeroidIndex];
+      const int centroidG = centroidsG[centeroidIndex];
+      const int centroidB = centroidsB[centeroidIndex];
 
-      float deltaCr = pixelR - centroidR;
-      float deltaCg = pixelG - centroidG;
-      float deltaCb = pixelB - centroidB;
+      const float deltaCr = pixelR - centroidR;
+      const float deltaCg = pixelG - centroidG;
+      const float deltaCb = pixelB - centroidB;
       float deltaC = deltaCr*deltaCr + deltaCg*deltaCg + deltaCb*deltaCb;
-      deltaC *= deltaCscale;
+      deltaC *= colorFactor;
 
-      float deltaDx = (x-centroidsX[centeroidIndex]);
-      float deltaDy = (y-centroidsY[centeroidIndex]);
+      const float deltaDx = x - centroidsX[centeroidIndex];
+      const float deltaDy = y - centroidsY[centeroidIndex];
       float deltaD = deltaDx*deltaDx + deltaDy*deltaDy;
-      deltaD *= deltaDscale;
+      deltaD *= spatialFactor;
 
-      float distance = m*deltaC + deltaD;
+      const float distance = compactnessParam*deltaC + deltaD;
       distances[pixelIndex] = distance;
     }
   }
 
-  bool somethingChanged = true;
+  // Repeat the algorithm to converge to final result
+  bool somethingHasChanged = true;
   int j = 0;
-  while(somethingChanged)
+  while(somethingHasChanged && (maxIter < 0 || j < maxIter))
   {
-    somethingChanged = false;
+    somethingHasChanged = false;
     j++;
-    if(maxIter > 0 && j > maxIter) break;
     for(int n = 0; n < numSuperpixelsAdjustes; ++n)
     {
+      // Calculate region of interest bounds
       int minX = centroidsX[n] - widthPerCentroid;
       int maxX = centroidsX[n] + widthPerCentroid;
       int minY = centroidsY[n] - heightPerCentroid;
       int maxY = centroidsY[n] + heightPerCentroid;
-      if(minX < 0) minX = 0;
-      else if(maxX > width - 1) maxX = width - 1;
-      if(minY < 0) minY = 0;
-      else if(maxY > height - 1) maxY = height - 1;
 
+      if(minX < 0) minX = 0;
+      else if(maxX > (int)width - 1) maxX = width - 1;
+      if(minY < 0) minY = 0;
+      else if(maxY > (int)height - 1) maxY = height - 1;
+
+      // Recalculate distance to centroid
       for(int y = minY; y <= maxY; ++y)
       {
         for(int x = minX; x <= maxX; ++x)
         {
-          int pixelIndex = y*width+x;
+          const int pixelIndex = y*width+x;
 
-          int pixelR = (unsigned char)pixels[3*pixelIndex];
-          int pixelG = (unsigned char)pixels[3*pixelIndex+1];
-          int pixelB = (unsigned char)pixels[3*pixelIndex+2];
+          const int pixelR = (unsigned char)pixels[3*pixelIndex];
+          const int pixelG = (unsigned char)pixels[3*pixelIndex+1];
+          const int pixelB = (unsigned char)pixels[3*pixelIndex+2];
 
-          int centroidR = centroidsR[n];
-          int centroidG = centroidsG[n];
-          int centroidB = centroidsB[n];
+          const int centroidR = centroidsR[n];
+          const int centroidG = centroidsG[n];
+          const int centroidB = centroidsB[n];
 
-          float deltaCr = pixelR - centroidR;
-          float deltaCg = pixelG - centroidG;
-          float deltaCb = pixelB - centroidB;
+          const float deltaCr = pixelR - centroidR;
+          const float deltaCg = pixelG - centroidG;
+          const float deltaCb = pixelB - centroidB;
           float deltaC = deltaCr*deltaCr + deltaCg*deltaCg + deltaCb*deltaCb;
-          deltaC *= deltaCscale;
+          deltaC *= colorFactor;
 
-          float deltaDx = (x-centroidsX[n]);
-          float deltaDy = (y-centroidsY[n]);
+          const float deltaDx = x - centroidsX[n];
+          const float deltaDy = y - centroidsY[n];
           float deltaD = deltaDx*deltaDx + deltaDy*deltaDy;
-          deltaD *= deltaDscale;
+          deltaD *= spatialFactor;
 
-          float distance = m*deltaC + deltaD;
+          float distance = compactnessParam*deltaC + deltaD;
 
+          // If pixel is closer to the new centroid, assign it to the new one
           if(distance < distances[pixelIndex])
           {
-            somethingChanged = true;
+            somethingHasChanged = true;
             toCentroidsMap[pixelIndex] = n;
             distances[pixelIndex] = distance;
           }
@@ -207,6 +223,7 @@ int main()
       }
     }
 
+    // Recalculate centroid parameters
     for(int i = 0; i < numSuperpixelsAdjustes; ++i)
     {
       centroidsX[i] = 0;
@@ -216,12 +233,13 @@ int main()
       centroidsB[i] = 0;
       centroidsCount[i] = 0;
     }
+
     for(int y = 0; y < height; ++y)
     {
       for (int x = 0; x < width; ++x)
       {
-        int pixelIndex = y*width+x;
-        int centroidIndex = toCentroidsMap[pixelIndex];
+        const int pixelIndex = y*width+x;
+        const int centroidIndex = toCentroidsMap[pixelIndex];
         centroidsCount[centroidIndex] += 1;
         centroidsX[centroidIndex] += x;
         centroidsY[centroidIndex] += y;
@@ -230,6 +248,7 @@ int main()
         centroidsB[centroidIndex] += (unsigned char)pixels[3*pixelIndex+2];
       }
     }
+
     for(int i = 0; i < numSuperpixelsAdjustes; ++i)
     {
       centroidsX[i] /= centroidsCount[i];
@@ -240,16 +259,22 @@ int main()
     }
   }
 
+  // Color pixels according to assigned centroid
   for(int y = 0; y < height; ++y)
   {
     for (int x = 0; x < width; ++x)
     {
-      int pixelIndex = y*width+x;
+      const int pixelIndex = y*width+x;
       newPixels[3*pixelIndex] = centroidsR[toCentroidsMap[pixelIndex]];
       newPixels[3*pixelIndex+1] = centroidsG[toCentroidsMap[pixelIndex]];
       newPixels[3*pixelIndex+2] = centroidsB[toCentroidsMap[pixelIndex]];
     }
   }
+
+  auto now = std::chrono::steady_clock::now();
+  std::chrono::duration<double, std::milli> elapsedTime = now - then;
+  std::cout << "Elapsed time: " << elapsedTime.count() << "ms\n";
+
   saveImage("output.ppm", width, height, newPixels);
 
   delete[] centroidsX;
