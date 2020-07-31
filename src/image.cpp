@@ -1,5 +1,7 @@
 #include "image.hpp"
 
+#include <fstream>
+
 Image::Image(const char* fileName)
 {
   std::ifstream file;
@@ -23,15 +25,31 @@ Image::Image(const char* fileName)
   file.get();
 
   len_ = 3*width_*height_;
-  pixels_ = new char[len_];
-  file.read(pixels_, len_);
+  pixels_ = std::make_unique<char[]>(len_);
+  file.read(pixels_.get(), len_);
 
   file.close();
 }
 
-Image::~Image()
+Image::Image(const Image& other)
 {
-  delete[] pixels_;
+  width_ = other.width_;
+  height_ = other.height_;
+
+  int len = 3*width_*height_;
+  pixels_ = std::make_unique<char[]>(len);
+
+  for(int i = 0; i < len; ++i)
+  {
+    pixels_[i] = other.pixels_[i];
+  }
+}
+
+Image::Image(Image&& other)
+{
+  width_ = other.width_;
+  height_ = other.height_;
+  pixels_ = std::move(other.pixels_);
 }
 
 bool Image::savePPM(const char* fileName) const
@@ -41,8 +59,39 @@ bool Image::savePPM(const char* fileName) const
   if(!file.is_open()) return false;
 
   file << "P6\n" << width_ << " " << height_ << "\n255\n";
-  file.write(pixels_, len_);
+  file.write(pixels_.get(), len_);
 
   file.close();
   return true;
+}
+
+Image& Image::operator=(const Image& other)
+{
+  if(&other != this)
+  {
+    width_ = other.width_;
+    height_ = other.height_;
+
+    int len = 3*width_*height_;
+    pixels_ = std::make_unique<char[]>(len);
+
+    for(int i = 0; i < len; ++i)
+    {
+      pixels_[i] = other.pixels_[i];
+    }
+  }
+
+  return *this;
+}
+
+Image& Image::operator=(Image&& other)
+{
+  if(&other != this)
+  {
+    width_ = other.width_;
+    height_ = other.height_;
+    pixels_ = std::move(other.pixels_);
+  }
+
+  return *this;
 }
