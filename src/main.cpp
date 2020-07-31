@@ -1,38 +1,10 @@
-#include <iostream>
-#include <fstream>
-#include <cmath>
 #include <chrono>
+#include <cmath>
+#include <fstream>
+#include <iostream>
 
+#include "centroid.hpp"
 #include "image.hpp"
-
-struct Centroid
-{
-  Centroid(): x(0), y(0), r(0), g(0), b(0) {}
-
-  float distance(const Centroid& other, float spatialFactor, float colorFactor, float compactness)
-  {
-    const float deltaCr = r - other.r;
-    const float deltaCg = g - other.g;
-    const float deltaCb = b - other.b;
-    float deltaC = deltaCr*deltaCr + deltaCg*deltaCg + deltaCb*deltaCb;
-    deltaC *= colorFactor;
-
-    const float deltaX = x - other.x;
-    const float deltaY = y - other.y;
-    float deltaD = deltaX*deltaX + deltaY*deltaY;
-    deltaD *= spatialFactor;
-
-    const float distance = compactness * deltaC + deltaD;
-    return distance;
-  }
-
-  float x;
-  float y;
-  float r;
-  float g;
-  float b;
-};
-
 
 int main()
 {
@@ -63,9 +35,11 @@ int main()
     {
       const float x = (nx + 0.5) * widthPerCentroid;
       const float y = (ny + 0.5) * heightPerCentroid;
+      
       centroids[n].x = x;
       centroids[n].y = y;
-      n+=1;
+
+      n += 1;
     }
   }
 
@@ -102,36 +76,16 @@ int main()
   // Define scaling factors for distance metric
   const float spatialFactor = 1.0/
     (widthPerCentroid*widthPerCentroid+heightPerCentroid*heightPerCentroid);
-  const float colorFactor = 1.0/(3*255*255);
 
   // For each pixel, calucate it's distance to assigned centroid
   for(int y = 0; y < image.getHeight(); ++y)
   {
     for (int x = 0; x < image.getWidth(); ++x)
     {
-      const int pixelIndex = y*image.getWidth()+x;
-      const int pixelR = (unsigned char)image[3*pixelIndex];
-      const int pixelG = (unsigned char)image[3*pixelIndex+1];
-      const int pixelB = (unsigned char)image[3*pixelIndex+2];
-
+      const int pixelIndex = y*image.getWidth() + x;
       const int centeroidIndex = toCentroidsMap[pixelIndex];
-
-      const int centroidR = centroids[centeroidIndex].r;
-      const int centroidG = centroids[centeroidIndex].g;
-      const int centroidB = centroids[centeroidIndex].b;
-
-      const float deltaCr = pixelR - centroidR;
-      const float deltaCg = pixelG - centroidG;
-      const float deltaCb = pixelB - centroidB;
-      float deltaC = deltaCr*deltaCr + deltaCg*deltaCg + deltaCb*deltaCb;
-      deltaC *= colorFactor;
-
-      const float deltaDx = x - centroids[centeroidIndex].x;
-      const float deltaDy = y - centroids[centeroidIndex].y;
-      float deltaD = deltaDx*deltaDx + deltaDy*deltaDy;
-      deltaD *= spatialFactor;
-
-      const float distance = compactnessParam*deltaC + deltaD;
+      
+      const float distance = centroids[centeroidIndex].calcDistance(image, x, y, spatialFactor, compactnessParam);
       distances[pixelIndex] = distance;
     }
   }
@@ -161,28 +115,8 @@ int main()
       {
         for(int x = minX; x <= maxX; ++x)
         {
-          const int pixelIndex = y*image.getWidth()+x;
-
-          const int pixelR = (unsigned char)image[3*pixelIndex];
-          const int pixelG = (unsigned char)image[3*pixelIndex+1];
-          const int pixelB = (unsigned char)image[3*pixelIndex+2];
-
-          const int centroidR = centroids[n].r;
-          const int centroidG = centroids[n].g;
-          const int centroidB = centroids[n].b;
-
-          const float deltaCr = pixelR - centroidR;
-          const float deltaCg = pixelG - centroidG;
-          const float deltaCb = pixelB - centroidB;
-          float deltaC = deltaCr*deltaCr + deltaCg*deltaCg + deltaCb*deltaCb;
-          deltaC *= colorFactor;
-
-          const float deltaDx = x - centroids[n].x;
-          const float deltaDy = y - centroids[n].y;
-          float deltaD = deltaDx*deltaDx + deltaDy*deltaDy;
-          deltaD *= spatialFactor;
-
-          float distance = compactnessParam*deltaC + deltaD;
+          const int pixelIndex = y*image.getWidth() + x;
+          const float distance = centroids[n].calcDistance(image, x, y, spatialFactor, compactnessParam);
 
           // If pixel is closer to the new centroid, assign it to the new one
           if(distance < distances[pixelIndex])

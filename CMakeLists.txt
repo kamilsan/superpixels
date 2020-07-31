@@ -14,6 +14,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set(PROJECT_CODE
     src/image.cpp include/image.hpp
+                  include/centroid.hpp
     src/main.cpp)
 
 include_directories(include)
