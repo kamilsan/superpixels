@@ -20,10 +20,10 @@ float Centroid::calcDistance(const Image& image, int x, int y, float spatialFact
 {
   const static float colorFactor = 1.0 / (3*255*255);
 
-  const int pixelIndex = y*image.getWidth()+x;
-  const int pixelR = (unsigned char)image[3*pixelIndex];
-  const int pixelG = (unsigned char)image[3*pixelIndex+1];
-  const int pixelB = (unsigned char)image[3*pixelIndex+2];
+  const int pixelIndex = 3 * (y * image.getWidth() + x);
+  const auto pixelR = image[pixelIndex];
+  const auto pixelG = image[pixelIndex + 1];
+  const auto pixelB = image[pixelIndex + 2];
 
   const float deltaCr = pixelR - this->r;
   const float deltaCg = pixelG - this->g;

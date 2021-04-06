@@ -2,6 +2,8 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <vector>
 
 #include "centroid.hpp"
 #include "image.hpp"
@@ -10,30 +12,25 @@ int main()
 {
   Image image{"img/input.png"};
 
-  const int numPixels = image.getWidth()*image.getHeight();
+  const int numPixels = image.getWidth() * image.getHeight();
   const int numSuperpixels = 1000;
 
   const float compactnessParam = 5.0f;
   const int maxIter = -1; // Negative if there is no limit
 
   const int superpixelsAcrossWidth = std::sqrt(numSuperpixels);
-  const int superpixelsAcrossHeight = numSuperpixels / superpixelsAcrossWidth; // NOTE: this may lead to non-squere grid
-  const int numSuperpixelsAdjustes = superpixelsAcrossWidth*superpixelsAcrossHeight;
+  const int superpixelsAcrossHeight = numSuperpixels / superpixelsAcrossWidth; // NOTE: this may lead to non-square grid
+  const int numSuperpixelsAdjustes = superpixelsAcrossWidth * superpixelsAcrossHeight;
 
-  Centroid* centroids = new Centroid[numSuperpixelsAdjustes];
-  int* centroidsCount = new int[numSuperpixelsAdjustes];
-
-  for(int i = 0; i < numSuperpixelsAdjustes; ++i)
-  {
-    centroidsCount[i] = 0;
-  }
+  auto centroids = std::make_unique<Centroid[]>(numSuperpixelsAdjustes);
+  std::vector<int> centroidsCount(numSuperpixelsAdjustes, 0);
 
   auto then = std::chrono::steady_clock::now();
 
-  const float widthPerCentroid = (float)image.getWidth()/superpixelsAcrossWidth;
-  const float heightPerCentroid = (float)image.getHeight()/superpixelsAcrossHeight;
+  const float widthPerCentroid = static_cast<float>(image.getWidth()) / superpixelsAcrossWidth;
+  const float heightPerCentroid = static_cast<float>(image.getHeight()) / superpixelsAcrossHeight;
 
-  // Initial placing of centroids
+  // Initial placement of centroids
   for(int ny = 0, n = 0; ny < superpixelsAcrossHeight; ++ny)
   {
     for(int nx = 0; nx < superpixelsAcrossWidth; ++nx)
@@ -50,23 +47,25 @@ int main()
 
   // TODO: move centroids out of edge
 
-  int* toCentroidsMap = new int[numPixels];
-  float* distances = new float[numPixels];
+  std::vector<int> toCentroidsMap(numPixels, 0);
+  std::vector<float> distances(numPixels, 0.0f);
 
   // Assign pixels to centroids
   for(int y = 0; y < image.getHeight(); ++y)
   {
     for (int x = 0; x < image.getWidth(); ++x)
     {
-      const int pixelIndex = y*image.getWidth()+x;
-      const int nx = x/widthPerCentroid;
-      const int ny = y/heightPerCentroid;
-      const int centroidIndex = ny*superpixelsAcrossWidth+nx;
+      const int pixelIndex = y * image.getWidth() + x;
+      const int nx = x / widthPerCentroid;
+      const int ny = y / heightPerCentroid;
+      const int centroidIndex = ny * superpixelsAcrossWidth + nx;
+
       centroidsCount[centroidIndex] += 1;
       toCentroidsMap[pixelIndex] = centroidIndex;
-      centroids[centroidIndex].r += (unsigned char)image[3*pixelIndex];
-      centroids[centroidIndex].g += (unsigned char)image[3*pixelIndex+1];
-      centroids[centroidIndex].b += (unsigned char)image[3*pixelIndex+2];
+      
+      centroids[centroidIndex].r += (unsigned char)image[3 * pixelIndex];
+      centroids[centroidIndex].g += (unsigned char)image[3 * pixelIndex + 1];
+      centroids[centroidIndex].b += (unsigned char)image[3 * pixelIndex + 2];
     }
   }
 
@@ -87,7 +86,7 @@ int main()
   {
     for (int x = 0; x < image.getWidth(); ++x)
     {
-      const int pixelIndex = y*image.getWidth() + x;
+      const int pixelIndex = y * image.getWidth() + x;
       const int centeroidIndex = toCentroidsMap[pixelIndex];
       
       const float distance = centroids[centeroidIndex].calcDistance(image, x, y, spatialFactor, compactnessParam);
@@ -110,17 +109,22 @@ int main()
       int minY = centroids[n].y - heightPerCentroid;
       int maxY = centroids[n].y + heightPerCentroid;
 
-      if(minX < 0) minX = 0;
-      else if(maxX > image.getWidth() - 1) maxX = image.getWidth() - 1;
-      if(minY < 0) minY = 0;
-      else if(maxY > image.getHeight() - 1) maxY = image.getHeight() - 1;
+      if(minX < 0) 
+        minX = 0;
+      else if(maxX > image.getWidth() - 1)
+        maxX = image.getWidth() - 1;
+
+      if(minY < 0) 
+        minY = 0;
+      else if(maxY > image.getHeight() - 1) 
+        maxY = image.getHeight() - 1;
 
       // Recalculate distance to centroid
       for(int y = minY; y <= maxY; ++y)
       {
         for(int x = minX; x <= maxX; ++x)
         {
-          const int pixelIndex = y*image.getWidth() + x;
+          const int pixelIndex = y * image.getWidth() + x;
           const float distance = centroids[n].calcDistance(image, x, y, spatialFactor, compactnessParam);
 
           // If pixel is closer to the new centroid, assign it to the new one
@@ -149,14 +153,14 @@ int main()
     {
       for (int x = 0; x < image.getWidth(); ++x)
       {
-        const int pixelIndex = y*image.getWidth()+x;
+        const int pixelIndex = y * image.getWidth() + x;
         const int centroidIndex = toCentroidsMap[pixelIndex];
         centroidsCount[centroidIndex] += 1;
         centroids[centroidIndex].x += x;
         centroids[centroidIndex].y += y;
-        centroids[centroidIndex].r += (unsigned char)image[3*pixelIndex];
-        centroids[centroidIndex].g += (unsigned char)image[3*pixelIndex+1];
-        centroids[centroidIndex].b += (unsigned char)image[3*pixelIndex+2];
+        centroids[centroidIndex].r += image[3 * pixelIndex];
+        centroids[centroidIndex].g += image[3 * pixelIndex + 1];
+        centroids[centroidIndex].b += image[3 * pixelIndex + 2];
       }
     }
 
@@ -176,9 +180,9 @@ int main()
     for (int x = 0; x < image.getWidth(); ++x)
     {
       const int pixelIndex = y*image.getWidth()+x;
-      image[3*pixelIndex] = centroids[toCentroidsMap[pixelIndex]].r;
-      image[3*pixelIndex+1] = centroids[toCentroidsMap[pixelIndex]].g;
-      image[3*pixelIndex+2] = centroids[toCentroidsMap[pixelIndex]].b;
+      image[3 * pixelIndex] = centroids[toCentroidsMap[pixelIndex]].r;
+      image[3 * pixelIndex + 1] = centroids[toCentroidsMap[pixelIndex]].g;
+      image[3 * pixelIndex + 2] = centroids[toCentroidsMap[pixelIndex]].b;
     }
   }
 
@@ -187,11 +191,6 @@ int main()
   std::cout << "Elapsed time: " << elapsedTime.count() << "ms\n";
 
   image.savePPM("output.ppm");
-
-  delete[] centroids;
-  delete[] centroidsCount;
-  delete[] toCentroidsMap;
-  delete[] distances;
 
   return 0;
 }
