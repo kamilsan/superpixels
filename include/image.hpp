@@ -17,12 +17,12 @@ public:
   Image& operator=(const Image& other);
   Image& operator=(Image&& other);
 
-  char operator[](unsigned int index) const { return pixels_[index]; }
-  char& operator[](unsigned int index) { return pixels_[index]; }
+  unsigned char operator[](unsigned int index) const { return pixels_[index]; }
+  unsigned char& operator[](unsigned int index) { return pixels_[index]; }
 
 private:
   int width_;
   int height_;
   int len_;
-  std::unique_ptr<char[]> pixels_;
+  std::unique_ptr<unsigned char[]> pixels_;
 };

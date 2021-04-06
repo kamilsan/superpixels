@@ -2,53 +2,42 @@
 
 #include <fstream>
 
-Image::Image(const char* fileName)
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+Image::Image(const char* filename)
 {
-  std::ifstream file;
-  file.open(fileName, std::ios::binary);
-  if(!file.is_open())
-    throw std::runtime_error("Failed to read provided image file!");
+  int components = 0;
+  unsigned char* data = stbi_load(filename, &width_, &height_, &components, 0);
 
-  char h[3];
-  file.read(h, 3);
-  if(h[0] != 'P' || h[1] != '6') 
-    throw std::runtime_error("Invalid image format!");;
-
-  while(file.get() == '#')
+  if(!data)
   {
-    while(file.get() != '\n');
+    throw std::runtime_error("Could not load provided image file!\n");
   }
-  file.unget();
-
-  int max;
-  file >> width_ >> height_ >> max;
-  file.get();
 
   len_ = 3*width_*height_;
-  pixels_ = std::make_unique<char[]>(len_);
-  file.read(pixels_.get(), len_);
+  pixels_ = std::make_unique<unsigned char[]>(len_);
 
-  file.close();
+  memcpy(pixels_.get(), data, len_ * sizeof(char));
+
+  stbi_image_free(data);
 }
 
 Image::Image(const Image& other)
 {
   width_ = other.width_;
   height_ = other.height_;
+  len_ = other.len_;
 
-  int len = 3*width_*height_;
-  pixels_ = std::make_unique<char[]>(len);
-
-  for(int i = 0; i < len; ++i)
-  {
-    pixels_[i] = other.pixels_[i];
-  }
+  pixels_ = std::make_unique<unsigned char[]>(len_);
+  memcpy(pixels_.get(), other.pixels_.get(), len_ * sizeof(unsigned char));
 }
 
 Image::Image(Image&& other)
 {
   width_ = other.width_;
   height_ = other.height_;
+  len_ = other.len_;
   pixels_ = std::move(other.pixels_);
 }
 
@@ -59,7 +48,7 @@ bool Image::savePPM(const char* fileName) const
   if(!file.is_open()) return false;
 
   file << "P6\n" << width_ << " " << height_ << "\n255\n";
-  file.write(pixels_.get(), len_);
+  file.write(reinterpret_cast<char*>(pixels_.get()), len_);
 
   file.close();
   return true;
@@ -71,14 +60,10 @@ Image& Image::operator=(const Image& other)
   {
     width_ = other.width_;
     height_ = other.height_;
+    len_ = other.len_;
 
-    int len = 3*width_*height_;
-    pixels_ = std::make_unique<char[]>(len);
-
-    for(int i = 0; i < len; ++i)
-    {
-      pixels_[i] = other.pixels_[i];
-    }
+    pixels_ = std::make_unique<unsigned char[]>(len_);
+    memcpy(pixels_.get(), other.pixels_.get(), len_ * sizeof(unsigned char));
   }
 
   return *this;
@@ -90,6 +75,7 @@ Image& Image::operator=(Image&& other)
   {
     width_ = other.width_;
     height_ = other.height_;
+    len_ = other.len_;
     pixels_ = std::move(other.pixels_);
   }
 

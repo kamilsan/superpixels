@@ -8,7 +8,7 @@
 
 int main()
 {
-  Image image{"input.ppm"};
+  Image image{"img/input.png"};
 
   const int numPixels = image.getWidth()*image.getHeight();
   const int numSuperpixels = 1000;
@@ -22,6 +22,11 @@ int main()
 
   Centroid* centroids = new Centroid[numSuperpixelsAdjustes];
   int* centroidsCount = new int[numSuperpixelsAdjustes];
+
+  for(int i = 0; i < numSuperpixelsAdjustes; ++i)
+  {
+    centroidsCount[i] = 0;
+  }
 
   auto then = std::chrono::steady_clock::now();
 

@@ -13,8 +13,9 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set(PROJECT_CODE
+    include/centroid.hpp
+    include/stb_image.h
     src/image.cpp include/image.hpp
-                  include/centroid.hpp
     src/main.cpp)
 
 include_directories(include)
